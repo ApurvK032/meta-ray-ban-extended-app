@@ -4,7 +4,11 @@
 
 Meta Ray-Ban Extension: an Android companion app for Ray-Ban Meta / Meta AI glasses. The app turns the phone into a structured control surface for remote capture, saved-photo review, and connection diagnostics.
 
-This helps with hands-free selfies and shots where pressing the glasses capture button would move the frame.
+## Why This Exists
+
+Ray-Ban Meta glasses are great for first-person photos, but the Meta AI app does not provide a simple phone-side remote shutter for taking glasses photos. That makes group selfies awkward: someone has to wear the glasses, press the capture button, or disturb the frame at the exact moment of capture.
+
+MREx solves that gap. Put the glasses on a steady surface, point them at the group, open MREx on the phone, and trigger the glasses camera remotely. It was built for biking group rides where we want to place the glasses on a bike, bench, rock, or other stable spot and get better group selfies without asking someone to stand behind the camera.
 
 ## UI Preview
 
