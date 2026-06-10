@@ -1,0 +1,5 @@
+# Meta Wearables Device Access Toolkit artifacts are hosted on GitHub Packages.
+# Create a classic GitHub personal access token with read:packages scope, then either:
+# 1. Copy this file to local.properties and set github_token below, or
+# 2. Export GITHUB_TOKEN in your shell before running Gradle.
+github_token=replace_with_github_pat_read_packages

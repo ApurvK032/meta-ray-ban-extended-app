@@ -1,0 +1,27 @@
+# Android / Gradle
+.gradle/
+.kotlin/
+build/
+**/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local secrets and machine-specific config
+local.properties
+
+# Build artifacts
+*.apk
+*.ap_
+*.aab
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
