@@ -1,6 +1,8 @@
-# Ray-Ban Meta Extended
+# MREx
 
-Android companion app for Ray-Ban Meta / Meta AI glasses. The first feature is remote photo capture: place the glasses somewhere, use the phone as the trigger, and save the glasses photo back to the phone.
+![MREx app icon](docs/assets/mrex-logo.png)
+
+Meta Ray-Ban Extension: an Android companion app for Ray-Ban Meta / Meta AI glasses. The first feature is remote photo capture: place the glasses somewhere, use the phone as the trigger, and save the glasses photo back to the phone.
 
 This helps with hands-free selfies and shots where pressing the glasses capture button would move the frame.
 
@@ -15,7 +17,7 @@ This helps with hands-free selfies and shots where pressing the glasses capture 
 Saved photos go here:
 
 ```text
-Pictures/Ray-Ban Meta Extended
+Pictures/MREx
 ```
 
 ## Requirements
@@ -55,7 +57,7 @@ If Android prompts for USB debugging or install permission, allow it.
 
 ## Run Workflow
 
-1. Open **Ray-Ban Meta Extended** on the phone.
+1. Open **MREx** on the phone.
 2. Grant Android Bluetooth and camera permissions.
 3. Tap **Register**.
 4. Complete the Meta AI registration screen.
@@ -64,7 +66,7 @@ If Android prompts for USB debugging or install permission, allow it.
 7. Tap **Start Preview**.
 8. Wait for `Stream: STREAMING`.
 9. Tap **Capture Photo**.
-10. Open Photos or a file manager and check `Pictures/Ray-Ban Meta Extended`.
+10. Open Photos or a file manager and check `Pictures/MREx`.
 
 ## Tools And Stack
 

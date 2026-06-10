@@ -40,5 +40,5 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "RayBanMetaExtended"
+rootProject.name = "MREx"
 include(":app")

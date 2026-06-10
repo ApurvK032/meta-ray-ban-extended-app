@@ -49,7 +49,7 @@ internal fun RemoteCaptureScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
       Text(
-          text = "Ray-Ban Meta Extended",
+          text = "MREx",
           style = MaterialTheme.typography.headlineSmall,
           color = Color(0xFF1F2A33),
           fontWeight = FontWeight.Bold,

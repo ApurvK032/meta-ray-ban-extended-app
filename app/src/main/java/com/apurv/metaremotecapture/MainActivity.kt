@@ -361,7 +361,7 @@ class MainActivity : ComponentActivity() {
                 uiState.copy(
                     isCapturing = false,
                     lastSavedUri = savedUri,
-                    status = "Saved to Pictures/Ray-Ban Meta Extended.",
+                    status = "Saved to Pictures/MREx.",
                     error = null,
                 )
           }
@@ -420,7 +420,7 @@ class MainActivity : ComponentActivity() {
           put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
           put(
               MediaStore.Images.Media.RELATIVE_PATH,
-              "${Environment.DIRECTORY_PICTURES}/Ray-Ban Meta Extended",
+              "${Environment.DIRECTORY_PICTURES}/MREx",
           )
           put(MediaStore.Images.Media.IS_PENDING, 1)
         }
