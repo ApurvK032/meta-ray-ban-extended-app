@@ -2,7 +2,9 @@ package com.apurv.metaremotecapture
 
 import android.Manifest
 import android.app.Activity
+import android.content.ContentUris
 import android.content.ContentValues
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
@@ -21,6 +23,9 @@ import androidx.compose.runtime.setValue
 import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.lifecycleScope
 import com.apurv.metaremotecapture.camera.YuvToBitmapConverter
+import com.apurv.metaremotecapture.model.AppSection
+import com.apurv.metaremotecapture.model.CaptureMode
+import com.apurv.metaremotecapture.model.GalleryPhoto
 import com.apurv.metaremotecapture.model.RemoteCaptureState
 import com.apurv.metaremotecapture.ui.RemoteCaptureScreen
 import com.meta.wearable.dat.camera.Stream
@@ -44,8 +49,10 @@ import java.io.ByteArrayInputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.meta.wearable.dat.core.types.Permission as WearablePermission
@@ -64,6 +71,8 @@ class MainActivity : ComponentActivity() {
   private var streamStateJob: Job? = null
   private var streamErrorJob: Job? = null
   private var videoJob: Job? = null
+  private var captureJob: Job? = null
+  private var galleryJob: Job? = null
 
   private val androidPermissionLauncher =
       registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -97,10 +106,18 @@ class MainActivity : ComponentActivity() {
             onRequestCamera = { requestWearableCamera() },
             onStartPreview = { startPreviewWithPermissionCheck() },
             onCapture = { capturePhoto() },
+            onStopCapture = { stopCaptureSequence() },
             onStop = { stopPreview() },
+            onSelectSection = { section -> uiState = uiState.copy(selectedSection = section) },
+            onSelectCaptureMode = { mode -> uiState = uiState.copy(captureMode = mode) },
+            onSelectBurstCount = { count -> uiState = uiState.copy(burstCount = count) },
+            onSelectIntervalSeconds = { seconds -> uiState = uiState.copy(intervalSeconds = seconds) },
+            onRefreshGallery = { refreshGallery() },
+            onOpenPhoto = { uri -> openPhoto(uri) },
         )
       }
     }
+    refreshGallery()
   }
 
   override fun onStart() {
@@ -112,6 +129,7 @@ class MainActivity : ComponentActivity() {
     stopPreview()
     registrationJob?.cancel()
     devicesJob?.cancel()
+    galleryJob?.cancel()
     deviceMetadataJobs.values.forEach { it.cancel() }
     deviceMetadataJobs.clear()
     super.onDestroy()
@@ -344,35 +362,200 @@ class MainActivity : ComponentActivity() {
   }
 
   private fun capturePhoto() {
+    when (uiState.captureMode) {
+      CaptureMode.SINGLE -> startSingleCapture()
+      CaptureMode.BURST -> startBurstCapture()
+      CaptureMode.INTERVAL -> {
+        if (uiState.isIntervalRunning) {
+          stopCaptureSequence()
+        } else {
+          startIntervalCapture()
+        }
+      }
+    }
+  }
+
+  private fun startSingleCapture() {
     val currentStream = stream
     if (currentStream == null || uiState.streamState != StreamState.STREAMING) {
       uiState = uiState.copy(error = "Start the glasses preview before capturing.")
       return
     }
 
-    uiState = uiState.copy(isCapturing = true, error = null, status = "Capturing...")
-    lifecycleScope.launch {
-      currentStream
-          .capturePhoto()
-          .onSuccess { photo ->
-            val bitmap = decodePhoto(photo)
-            val savedUri = withContext(Dispatchers.IO) { saveBitmap(bitmap) }
+    captureJob?.cancel()
+    captureJob =
+        lifecycleScope.launch {
+          uiState =
+              uiState.copy(
+                  isCapturing = true,
+                  captureProgress = "Capturing",
+                  error = null,
+                  status = "Capturing...",
+              )
+          try {
+            val savedUri = captureAndSaveOnce(currentStream)
             uiState =
                 uiState.copy(
                     isCapturing = false,
+                    captureProgress = null,
                     lastSavedUri = savedUri,
                     status = "Saved to Pictures/MREx.",
                     error = null,
                 )
-          }
-          .onFailure { error, _ ->
+            refreshGallery()
+          } catch (error: Exception) {
             uiState =
                 uiState.copy(
                     isCapturing = false,
-                    error = "Capture failed: ${error.description}",
+                    captureProgress = null,
+                    error = "Capture failed: ${error.message ?: "Unknown error"}",
                 )
           }
+        }
+  }
+
+  private fun startBurstCapture() {
+    val currentStream = stream
+    if (currentStream == null || uiState.streamState != StreamState.STREAMING) {
+      uiState = uiState.copy(error = "Start the glasses preview before capturing.")
+      return
     }
+
+    val total = uiState.burstCount
+    captureJob?.cancel()
+    captureJob =
+        lifecycleScope.launch {
+          var saved = 0
+          var lastUri: Uri? = null
+          uiState =
+              uiState.copy(
+                  isCapturing = true,
+                  captureProgress = "Burst 0/$total",
+                  error = null,
+                  status = "Burst capture running...",
+              )
+          try {
+            repeat(total) { index ->
+              uiState =
+                  uiState.copy(
+                      captureProgress = "Burst ${index + 1}/$total",
+                      status = "Capturing ${index + 1} of $total...",
+                  )
+              lastUri = captureAndSaveOnce(currentStream)
+              saved++
+              if (index < total - 1) {
+                delay(BURST_CAPTURE_GAP_MS)
+              }
+            }
+            uiState =
+                uiState.copy(
+                    isCapturing = false,
+                    captureProgress = null,
+                    lastSavedUri = lastUri,
+                    status = "Saved $saved burst photos to Pictures/MREx.",
+                    error = null,
+                )
+            refreshGallery()
+          } catch (error: Exception) {
+            uiState =
+                uiState.copy(
+                    isCapturing = false,
+                    captureProgress = null,
+                    lastSavedUri = lastUri,
+                    status = if (saved > 0) "Saved $saved photos before burst stopped." else uiState.status,
+                    error = "Burst failed: ${error.message ?: "Unknown error"}",
+                )
+            refreshGallery()
+          }
+        }
+  }
+
+  private fun startIntervalCapture() {
+    val currentStream = stream
+    if (currentStream == null || uiState.streamState != StreamState.STREAMING) {
+      uiState = uiState.copy(error = "Start the glasses preview before capturing.")
+      return
+    }
+
+    val intervalSeconds = uiState.intervalSeconds
+    captureJob?.cancel()
+    captureJob =
+        lifecycleScope.launch {
+          var saved = 0
+          var lastUri: Uri? = null
+          uiState =
+              uiState.copy(
+                  isCapturing = true,
+                  isIntervalRunning = true,
+                  captureProgress = "Interval ready",
+                  error = null,
+                  status = "Interval capture every ${intervalSeconds}s.",
+              )
+          try {
+            while (isActive) {
+              uiState =
+                  uiState.copy(
+                      captureProgress = "Interval ${saved + 1}",
+                      status = "Interval shot ${saved + 1}...",
+                  )
+              lastUri = captureAndSaveOnce(currentStream)
+              saved++
+              uiState =
+                  uiState.copy(
+                      lastSavedUri = lastUri,
+                      status = "Interval running. Saved $saved photos.",
+                  )
+              refreshGallery()
+              delay(intervalSeconds * 1000L)
+            }
+          } catch (error: Exception) {
+            uiState =
+                uiState.copy(
+                    error = "Interval failed: ${error.message ?: "Unknown error"}",
+                )
+          } finally {
+            uiState =
+                uiState.copy(
+                    isCapturing = false,
+                    isIntervalRunning = false,
+                    captureProgress = null,
+                    lastSavedUri = lastUri,
+                    status =
+                        if (saved > 0) {
+                          "Interval stopped. Saved $saved photos."
+                        } else {
+                          "Interval stopped."
+                        },
+                )
+          }
+        }
+  }
+
+  private fun stopCaptureSequence() {
+    captureJob?.cancel()
+    captureJob = null
+    uiState =
+        uiState.copy(
+            isCapturing = false,
+            isIntervalRunning = false,
+            captureProgress = null,
+            status = "Capture stopped.",
+        )
+  }
+
+  private suspend fun captureAndSaveOnce(currentStream: Stream): Uri? {
+    var savedUri: Uri? = null
+    var failure: String? = null
+    currentStream
+        .capturePhoto()
+        .onSuccess { photo ->
+          val bitmap = decodePhoto(photo)
+          savedUri = withContext(Dispatchers.IO) { saveBitmap(bitmap) }
+        }
+        .onFailure { error, _ -> failure = error.description }
+
+    failure?.let { throw IllegalStateException(it) }
+    return savedUri
   }
 
   private fun decodePhoto(photo: PhotoData): Bitmap {
@@ -413,7 +596,7 @@ class MainActivity : ComponentActivity() {
 
   private fun saveBitmap(bitmap: Bitmap): Uri? {
     val name =
-        "meta_remote_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.jpg"
+        "mrex_${SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())}.jpg"
     val values =
         ContentValues().apply {
           put(MediaStore.Images.Media.DISPLAY_NAME, name)
@@ -437,13 +620,100 @@ class MainActivity : ComponentActivity() {
     return uri
   }
 
+  private fun refreshGallery() {
+    galleryJob?.cancel()
+    galleryJob =
+        lifecycleScope.launch {
+          uiState = uiState.copy(isGalleryLoading = true, galleryError = null)
+          try {
+            val photos = withContext(Dispatchers.IO) { loadGalleryPhotos() }
+            uiState =
+                uiState.copy(
+                    galleryPhotos = photos,
+                    isGalleryLoading = false,
+                    galleryError = null,
+                )
+          } catch (error: Exception) {
+            uiState =
+                uiState.copy(
+                    isGalleryLoading = false,
+                    galleryError = error.message ?: "Could not load gallery.",
+                )
+          }
+        }
+  }
+
+  private fun loadGalleryPhotos(): List<GalleryPhoto> {
+    val projection =
+        arrayOf(
+            MediaStore.Images.Media._ID,
+            MediaStore.Images.Media.DISPLAY_NAME,
+            MediaStore.Images.Media.DATE_TAKEN,
+            MediaStore.Images.Media.DATE_ADDED,
+            MediaStore.Images.Media.SIZE,
+        )
+    val relativePath = "${Environment.DIRECTORY_PICTURES}/MREx"
+    val selection =
+        "${MediaStore.Images.Media.RELATIVE_PATH}=? OR ${MediaStore.Images.Media.RELATIVE_PATH}=?"
+    val selectionArgs = arrayOf(relativePath, "$relativePath/")
+    val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
+    val photos = mutableListOf<GalleryPhoto>()
+
+    contentResolver
+        .query(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            projection,
+            selection,
+            selectionArgs,
+            sortOrder,
+        )
+        ?.use { cursor ->
+          val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+          val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
+          val takenColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_TAKEN)
+          val addedColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
+          val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.SIZE)
+
+          while (cursor.moveToNext()) {
+            val id = cursor.getLong(idColumn)
+            val name = cursor.getString(nameColumn) ?: "MREx photo"
+            val dateTaken = cursor.getLong(takenColumn)
+            val dateAdded = cursor.getLong(addedColumn) * 1000L
+            val timestamp = if (dateTaken > 0) dateTaken else dateAdded
+            photos +=
+                GalleryPhoto(
+                    uri =
+                        ContentUris.withAppendedId(
+                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                            id,
+                        ),
+                    displayName = name,
+                    timestampMillis = timestamp,
+                    sizeBytes = cursor.getLong(sizeColumn),
+                )
+          }
+        }
+
+    return photos.sortedByDescending { it.timestampMillis }
+  }
+
+  private fun openPhoto(uri: Uri) {
+    val intent =
+        Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, "image/*")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    startActivity(intent)
+  }
+
   private fun stopPreview() {
+    captureJob?.cancel()
     videoJob?.cancel()
     streamStateJob?.cancel()
     streamErrorJob?.cancel()
     sessionStateJob?.cancel()
     sessionErrorJob?.cancel()
     videoJob = null
+    captureJob = null
     streamStateJob = null
     streamErrorJob = null
     sessionStateJob = null
@@ -460,11 +730,14 @@ class MainActivity : ComponentActivity() {
             sessionState = null,
             status = "Preview stopped.",
             isCapturing = false,
+            isIntervalRunning = false,
+            captureProgress = null,
         )
   }
 
   companion object {
     private const val TAG = "MetaRemoteCapture"
+    private const val BURST_CAPTURE_GAP_MS = 900L
 
     private val REQUIRED_ANDROID_PERMISSIONS =
         arrayOf(

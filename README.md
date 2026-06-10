@@ -2,7 +2,7 @@
 
 ![MREx app icon](docs/assets/mrex-logo.png)
 
-Meta Ray-Ban Extension: an Android companion app for Ray-Ban Meta / Meta AI glasses. The first feature is remote photo capture: place the glasses somewhere, use the phone as the trigger, and save the glasses photo back to the phone.
+Meta Ray-Ban Extension: an Android companion app for Ray-Ban Meta / Meta AI glasses. The app turns the phone into a structured control surface for remote capture, saved-photo review, and connection diagnostics.
 
 This helps with hands-free selfies and shots where pressing the glasses capture button would move the frame.
 
@@ -11,8 +11,10 @@ This helps with hands-free selfies and shots where pressing the glasses capture 
 1. Connects to paired Ray-Ban Meta glasses through Meta's Wearables Device Access Toolkit.
 2. Registers the app with Meta AI in Developer Mode.
 3. Starts a glasses camera stream session.
-4. Captures a photo from the phone.
-5. Saves the JPEG to Android Photos through MediaStore.
+4. Captures single, burst, or interval photos from the phone.
+5. Saves JPEGs to Android Photos through MediaStore.
+6. Shows captured MREx photos in an in-app gallery grouped by date.
+7. Shows a connection dashboard for registration, device, session, and stream state.
 
 Saved photos go here:
 
@@ -65,8 +67,12 @@ If Android prompts for USB debugging or install permission, allow it.
 6. Tap **Allow Camera** to grant glasses camera permission.
 7. Tap **Start Preview**.
 8. Wait for `Stream: STREAMING`.
-9. Tap **Capture Photo**.
-10. Open Photos or a file manager and check `Pictures/MREx`.
+9. Pick a capture mode:
+   - **Single** captures one photo.
+   - **Burst** captures 3 or 5 photos sequentially.
+   - **Interval** keeps taking photos every 5, 10, or 30 seconds until stopped.
+10. Tap the large shutter button.
+11. Open the **Gallery** tab or check `Pictures/MREx`.
 
 ## Tools And Stack
 
@@ -84,17 +90,18 @@ If Android prompts for USB debugging or install permission, allow it.
 
 ```text
 app/src/main/java/com/apurv/metaremotecapture/
-  MainActivity.kt        App lifecycle, DAT registration, session, capture, and saving
+  MainActivity.kt        App lifecycle, DAT registration, sessions, capture modes, and gallery loading
   camera/               Preview frame conversion helpers
-  model/                UI state
-  ui/                   Compose screen and controls
+  model/                UI state, capture mode, app section, and gallery models
+  ui/                   Compose screens and controls
 ```
 
 ## Current State
 
-- Remote capture works after the DAT stream is running.
+- Single, burst, and interval remote capture work after the DAT stream is running.
+- The gallery lists MREx photos by date from `Pictures/MREx`.
+- The connection dashboard shows Android, DAT, device, session, and stream state.
 - The capture path is verified on Pixel 7a with Ray-Ban Meta glasses.
-- The preview surface is present, but capture is the primary verified workflow.
 - The app uses `APPLICATION_ID=0`, which is for Meta AI Developer Mode testing.
 
 ## Privacy And Repository Safety
