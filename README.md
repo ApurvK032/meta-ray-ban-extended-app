@@ -6,6 +6,14 @@ Meta Ray-Ban Extension: an Android companion app for Ray-Ban Meta / Meta AI glas
 
 This helps with hands-free selfies and shots where pressing the glasses capture button would move the frame.
 
+## UI Preview
+
+<p>
+  <img src="docs/assets/screenshots/capture.png" alt="MREx capture screen" width="260" />
+  <img src="docs/assets/screenshots/gallery.png" alt="MREx gallery screen" width="260" />
+  <img src="docs/assets/screenshots/connection.png" alt="MREx connection dashboard" width="260" />
+</p>
+
 ## What It Does
 
 1. Connects to paired Ray-Ban Meta glasses through Meta's Wearables Device Access Toolkit.
